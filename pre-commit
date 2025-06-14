@@ -1,0 +1,86 @@
+#!/bin/bash
+declare -a ErrorMsg=()
+
+addCommitError() {
+  for i in "$@"; do
+    ErrorMsg+=("$i")
+  done
+}
+
+ExitIfError() {
+  if [ ${#ErrorMsg[@]} -gt 0 ]; then
+    echo -e "\n❌ Some custom verifications of this project failed;"
+    for i in "${!ErrorMsg[@]}"; do
+      echo "    $((i + 1)).${ErrorMsg[i]}"
+    done
+    exit 1
+  fi
+}
+
+checkIgnore() {
+
+  staged_files=$(git diff --cached --name-only)
+
+  for file in $staged_files; do
+
+    temp=$(git check-ignore --no-index -q "$file")
+    flag=$?
+    # https://git-scm.com/docs/git-check-ignore
+    # 0 this file is ignored
+    # 1 right file
+    # 128 run error
+
+    # echo "$file flag: |$flag|"
+    if [ $flag != 1 ]; then
+      addCommitError "[ $file ] is in [ .gitignore ]"
+    fi
+
+  done
+
+}
+
+# addCommitError "abcdefg"
+# addCommitError "err2"
+# addCommitError "err3" "err4" "err5"
+
+ifNoLocalIgnore() {
+  FileName="local.gitignore"
+  if [ ! -f "$FileName" ]; then
+    cat >>$FileName <<EOF
+# For local use only
+
+EOF
+  fi
+}
+ifNoShareIgnore() {
+  FileName="share.gitignore"
+  if [ ! -f "$FileName" ]; then
+    cat >>$FileName <<EOF
+# Shared with the Team
+.gitignore
+local.gitignore
+
+EOF
+  fi
+}
+
+mergeIgnore() {
+  localFileName="local.gitignore"
+  shareFileName="share.gitignore"
+  echo -e "# this file merge by $localFileName and $shareFileName\n" >.gitignore
+
+  cat $localFileName >>.gitignore
+  echo -e "\n\n\n###########################\n\n\n" >>.gitignore
+  cat $shareFileName >>.gitignore
+}
+
+main() {
+  ifNoLocalIgnore
+  ifNoShareIgnore
+  mergeIgnore
+  checkIgnore
+  ExitIfError
+
+}
+
+main
